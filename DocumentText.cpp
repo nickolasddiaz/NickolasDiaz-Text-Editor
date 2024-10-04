@@ -9,6 +9,8 @@
 #include <memory>
 #include <functional>
 #include <iostream>
+#include <stack>
+
 using namespace std;
 
 #include "DocumentText.h"
@@ -64,11 +66,29 @@ bool DocumentText::initHandle(HANDLE hFile) {
     return true;
 }
 
-char* buffer;
-int length;
-ULONG numlines;
-ULONG* linebuffer;
-HWND textboxhwnd;
+void DocumentText::getText(size_t pos, size_t len, char* temp) {
+    if (pos >= getLength() || len == 0) {
+        return;
+    }
+
+    size_t end = min(pos + len, getLength());
+    size_t actualLen = end - pos;
+
+    if (pos < gapStart) {
+        size_t beforeGap = min(actualLen, gapStart - pos);
+        memcpy(temp, buffer + pos, beforeGap);
+
+        if (beforeGap < actualLen) {
+            size_t afterGap = actualLen - beforeGap;
+            memcpy(temp + beforeGap, buffer + gapEnd, afterGap);
+        }
+    }
+    else {
+        memcpy(temp, buffer + pos + gapSize, actualLen);
+    }
+
+    temp[actualLen] = '\0';
+}
 
 void DocumentText::insertText(const char* text, size_t len, size_t position) {
     if (buffer == NULL) {
@@ -160,3 +180,90 @@ ULONG DocumentText::getline(ULONG lineno, char* buf, size_t len) {
     }
     return static_cast<ULONG>(lineLength);
 }
+
+
+
+
+void DocumentText::setCaretPosition(size_t position) {
+    // Set the caret position using Windows API
+    SendMessage(textboxhwnd, EM_SETSEL, (WPARAM)position, (LPARAM)position);
+}
+
+size_t DocumentText::getCaretPosition() const {
+    // Get the current caret position using Windows API
+    DWORD startPos, endPos;
+    SendMessage(textboxhwnd, EM_GETSEL, (WPARAM)&startPos, (LPARAM)&endPos);
+    return startPos;
+}
+
+
+    InsertCommand::InsertCommand(DocumentText& buf, const std::string& t, size_t pos)
+        : buffer(buf), text(t), position(pos) {}
+
+    void InsertCommand::execute()  {
+        buffer.insertText(text.c_str(), text.length(), position);
+    }
+
+    void InsertCommand::undo()  {
+        buffer.deleteText(position, position + text.length());
+    }
+
+    size_t InsertCommand::getCursorPosition() const {
+        return position + text.length(); // After insertion
+    }
+
+
+
+    DeleteCommand::DeleteCommand(DocumentText& buf, size_t pos, size_t len)
+        : buffer(buf), position(pos) {
+        char* temp = new char[len + 1];
+        buffer.getText(pos, len, temp);
+        deletedText = std::string(temp, len);
+        delete[] temp;
+    }
+
+    void DeleteCommand::execute()  {
+        buffer.deleteText(position, position + deletedText.length());
+    }
+
+    void DeleteCommand::undo()  {
+        buffer.insertText(deletedText.c_str(), deletedText.length(), position);
+    }
+
+    size_t DeleteCommand::getCursorPosition() const  {
+        return position; // After deletion
+    }
+
+    void CommandHistory::executeCommand(std::unique_ptr<Command> cmd) {
+        cmd->execute();
+        lastCommand = cmd.get();
+        undoStack.push(std::move(cmd));
+        // Clear redo stack
+        while (!redoStack.empty()) {
+            redoStack.pop();
+        }
+    }
+
+    void CommandHistory::undo() {
+        if (!undoStack.empty()) {
+            auto cmd = std::move(undoStack.top());
+            undoStack.pop();
+            cmd->undo();
+            lastCommand = cmd.get();
+            redoStack.push(std::move(cmd));
+        }
+    }
+
+    void CommandHistory::redo() {
+        if (!redoStack.empty()) {
+            auto cmd = std::move(redoStack.top());
+            redoStack.pop();
+            cmd->execute();
+            lastCommand = cmd.get();
+            undoStack.push(std::move(cmd));
+        }
+    }
+
+    size_t CommandHistory::getLastCursorPosition() const {
+        return lastCommand ? lastCommand->getCursorPosition() : 0;
+    }

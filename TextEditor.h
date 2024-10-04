@@ -18,6 +18,7 @@ using namespace std;
 
 class TextEditor {
 public:
+    CommandHistory commandHistory;
     HWND hMainWindow;
     HMENU hMenu;
     static HINSTANCE hInstance;
@@ -27,6 +28,9 @@ public:
     static const int LONGEST_LINE = 1024;
 
     TextEditor();
+    void undo();
+    void redo();
+    void updateEditControl();
     void show();
     static LRESULT CALLBACK WindowProcedure(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp);
     static void setInstance(HINSTANCE hInst);
@@ -55,6 +59,7 @@ private:
     LONG PaintLine(HDC hdc, ULONG nLineNo, DocumentText* document, const RECT& clientRect);
 
     static LRESULT CALLBACK SubclassEditProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
+    DocumentText* getCurrentDocument();
     void SynchronizeDocumentWithEdit(HWND hEditControl);
 
 

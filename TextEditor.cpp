@@ -9,6 +9,9 @@ constexpr int FILE_MENU_SAVE = 4;
 constexpr int FILE_MENU_SAVE_AS = 5;
 constexpr int FILE_MENU_SAVE_ALL = 6;
 
+constexpr int EDIT_MENU_UNDO = 101;
+constexpr int EDIT_MENU_REDO = 102;
+
 
 
 
@@ -31,6 +34,7 @@ TextEditor::TextEditor() {
         };
 
 }
+
 
 void TextEditor::show() {
     ShowWindow(hMainWindow, SW_SHOW);
@@ -79,6 +83,7 @@ void TextEditor::createMainWindow() {
 void TextEditor::addMenus() {
     hMenu = CreateMenu();
     HMENU hFileMenu = CreateMenu();
+    HMENU hEditMenu = CreateMenu();
 
     AppendMenu(hFileMenu, MF_STRING, FILE_MENU_NEW, L"New File");
     AppendMenu(hFileMenu, MF_STRING, FILE_MENU_OPEN, L"Open File");
@@ -88,8 +93,12 @@ void TextEditor::addMenus() {
     AppendMenu(hFileMenu, MF_SEPARATOR, NULL, NULL);
     AppendMenu(hFileMenu, MF_STRING, FILE_MENU_EXIT, L"Exit");
 
+    AppendMenu(hEditMenu, MF_STRING, EDIT_MENU_UNDO, L"Undo\tCtrl+Z");
+    AppendMenu(hEditMenu, MF_STRING, EDIT_MENU_REDO, L"Redo\tCtrl+Y");
+
+
     AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hFileMenu, L"File");
-    AppendMenu(hMenu, MF_STRING, NULL, L"Help");
+    AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hEditMenu, L"Edit");
 
     SetMenu(hMainWindow, hMenu);
 }
@@ -127,6 +136,7 @@ LRESULT TextEditor::handleMessage(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
             break;
         }
+
         case WM_SIZE:
             if (tabControl) {
                 RECT rcClient;
@@ -138,9 +148,22 @@ LRESULT TextEditor::handleMessage(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_DESTROY:
             PostQuitMessage(0);
             return 0;
+
         case WM_PAINT:
             return OnPaint(hWnd);
 
+        case WM_KEYDOWN:
+            if (GetKeyState(VK_CONTROL) & 0x8000) {
+                switch (wp) {
+                case 'Z':
+                    undo();
+                    return 0;
+                case 'Y':
+                    redo();
+                    return 0;
+                }
+            }
+            break;
         default:
             return DefWindowProc(hWnd, msg, wp, lp);
         }
@@ -189,6 +212,12 @@ LRESULT TextEditor::handleCommand(WPARAM wp, LPARAM lp) {
             DestroyWindow(hMainWindow);
         }
         break;
+    case EDIT_MENU_UNDO:
+        undo();
+        return 0;
+    case EDIT_MENU_REDO:
+        redo();
+        return 0;
     }
     return 0;
 }
@@ -401,27 +430,117 @@ LONG TextEditor::PaintLine(HDC hdc, ULONG nLineNo, DocumentText* document, const
 
     return 0;
 }
-
 LRESULT CALLBACK TextEditor::SubclassEditProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
     TextEditor* pThis = reinterpret_cast<TextEditor*>(dwRefData);
-    
-    // Process the message first
-    LRESULT result = DefSubclassProc(hWnd, uMsg, wParam, lParam);
+
     switch (uMsg) {
-    case WM_CHAR:
-    case WM_KEYDOWN:
-    case WM_PASTE:
-    case WM_CUT:
-        // Then synchronize our document
+    case WM_CHAR: {
+        if (wParam >= 32 || wParam == VK_TAB || wParam == VK_RETURN) {
+            // Get current selection
+            DWORD start, end;
+            SendMessage(hWnd, EM_GETSEL, (WPARAM)&start, (LPARAM)&end);
+
+            // Create and execute insert command
+            char ch = static_cast<char>(wParam);
+            std::string insertText(1, ch);
+            pThis->commandHistory.executeCommand(std::make_unique<InsertCommand>(*(pThis->getCurrentDocument()), insertText, start));
+
+            // Let the default proc handle the actual insertion
+            LRESULT result = DefSubclassProc(hWnd, uMsg, wParam, lParam);
+            pThis->SynchronizeDocumentWithEdit(hWnd);
+            return result;
+        }
+        break;
+    }
+    case WM_KEYDOWN: {
+        if (GetKeyState(VK_CONTROL) & 0x8000) {
+            switch (wParam) {
+            case 'Z':
+                pThis->undo();
+                return 0; // Prevent default handling
+            case 'Y':
+                pThis->redo();
+                return 0; // Prevent default handling
+            }
+        }
+
+        if (wParam == VK_BACK || wParam == VK_DELETE) {
+            // Get current selection
+            DWORD start, end;
+            SendMessage(hWnd, EM_GETSEL, (WPARAM)&start, (LPARAM)&end);
+
+            if (start == end) {
+                if (wParam == VK_BACK && start > 0) {
+                    --start;
+                }
+                else if (wParam == VK_DELETE && end < pThis->getCurrentDocument()->getLength()) {
+                    ++end;
+                }
+            }
+
+            if (start != end) {
+                // Create and execute delete command
+                pThis->commandHistory.executeCommand(std::make_unique<DeleteCommand>(*(pThis->getCurrentDocument()), start, end - start));
+            }
+
+            // Let the default proc handle the actual deletion
+            LRESULT result = DefSubclassProc(hWnd, uMsg, wParam, lParam);
+            pThis->SynchronizeDocumentWithEdit(hWnd);
+            return result;
+        }
+        break;
+    }
+    case WM_PASTE: {
+        // Handle paste operation
+        if (OpenClipboard(hWnd)) {
+            HANDLE hData = GetClipboardData(CF_TEXT);
+            if (hData != NULL) {
+                char* pszText = static_cast<char*>(GlobalLock(hData));
+                if (pszText != NULL) {
+                    // Get current selection
+                    DWORD start, end;
+                    SendMessage(hWnd, EM_GETSEL, (WPARAM)&start, (LPARAM)&end);
+
+                    // Create and execute insert command
+                    pThis->commandHistory.executeCommand(std::make_unique<InsertCommand>(*(pThis->getCurrentDocument()), pszText, start));
+
+                    GlobalUnlock(hData);
+                }
+            }
+            CloseClipboard();
+        }
+        // Let the default proc handle the actual paste
+        LRESULT result = DefSubclassProc(hWnd, uMsg, wParam, lParam);
         pThis->SynchronizeDocumentWithEdit(hWnd);
         return result;
+    }
+    case WM_CUT: {
+        // Handle cut operation
+        // Get current selection
+        DWORD start, end;
+        SendMessage(hWnd, EM_GETSEL, (WPARAM)&start, (LPARAM)&end);
 
-    case WM_NCDESTROY:
-        RemoveWindowSubclass(hWnd, SubclassEditProc, uIdSubclass);
-        break;
+        if (start != end) {
+            // Create and execute delete command
+            pThis->commandHistory.executeCommand(std::make_unique<DeleteCommand>(*(pThis->getCurrentDocument()), start, end - start));
+        }
+
+        // Let the default proc handle the actual cut
+        LRESULT result = DefSubclassProc(hWnd, uMsg, wParam, lParam);
+        pThis->SynchronizeDocumentWithEdit(hWnd);
+        return result;
+    }
     }
 
     return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+}
+
+DocumentText* TextEditor::getCurrentDocument() {
+    int currentTabIndex = tabControl->getCurrentTabIndex();
+    if (currentTabIndex >= 0 && currentTabIndex < documents.size()) {
+        return documents[currentTabIndex].get();
+    }
+    return nullptr;
 }
 
 void TextEditor::SynchronizeDocumentWithEdit(HWND hEditControl) {
@@ -447,4 +566,23 @@ void TextEditor::SynchronizeDocumentWithEdit(HWND hEditControl) {
 
     // Insert the new content
     currentDoc->insertText(utf8Buffer.data(), utf8Length - 1, 0);  // -1 to exclude null terminator
+}
+
+void TextEditor::undo() {
+    commandHistory.undo();
+    updateEditControl();
+}
+
+void TextEditor::redo() {
+    commandHistory.redo();
+    updateEditControl();
+}
+
+void TextEditor::updateEditControl() {
+    int currentTabIndex = tabControl->getCurrentTabIndex();
+    if (currentTabIndex >= 0 && currentTabIndex < documents.size()) {
+        DocumentText* currentDoc = documents[currentTabIndex].get();
+        HWND editControl = tabControl->getCurrentEditControl();
+        displayFile(currentDoc, editControl);
+    }
 }
