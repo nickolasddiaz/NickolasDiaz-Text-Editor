@@ -30,6 +30,7 @@ public:
     TextEditor();
     void undo();
     void redo();
+    void setCursorPosition(size_t position);
     void updateEditControl();
     void show();
     static LRESULT CALLBACK WindowProcedure(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp);

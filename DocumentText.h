@@ -21,7 +21,7 @@ public:
     void insertText(const char* text, size_t len, size_t position);
     void deleteText(size_t start, size_t end);
     void moveGap(size_t position);
-    size_t getLength() const { return bufferSize - gapSize; }
+    size_t getLength() const;
     std::vector<size_t> lineStarts;
     void updateLineStarts();
     void getText(size_t pos, size_t len, char* temp);
@@ -85,6 +85,7 @@ private:
     std::stack<std::unique_ptr<Command>> undoStack;
     std::stack<std::unique_ptr<Command>> redoStack;
     Command* lastCommand;
+    size_t lastCursorPosition = 0;
 
 public:
     void executeCommand(std::unique_ptr<Command> cmd);

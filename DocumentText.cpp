@@ -19,7 +19,7 @@ using namespace std;
 
 DocumentText::DocumentText(HWND parentWindow)
     : textboxhwnd(parentWindow), buffer(nullptr), bufferSize(0),
-    gapStart(0), gapEnd(0), gapSize(0) {}
+          gapStart(0), gapEnd(0), gapSize(0) {}
 
 DocumentText::~DocumentText() {
     delete[] buffer;
@@ -68,6 +68,7 @@ bool DocumentText::initHandle(HANDLE hFile) {
 
 void DocumentText::getText(size_t pos, size_t len, char* temp) {
     if (pos >= getLength() || len == 0) {
+        temp[0] = '\0';
         return;
     }
 
@@ -91,29 +92,47 @@ void DocumentText::getText(size_t pos, size_t len, char* temp) {
 }
 
 void DocumentText::insertText(const char* text, size_t len, size_t position) {
-    if (buffer == NULL) {
-        bufferSize = 1024;
+    if (buffer == nullptr) {
+        bufferSize = max(len + 1024, static_cast<size_t>(1024));
         buffer = new char[bufferSize];
+        gapStart = 0;
         gapEnd = bufferSize;
         gapSize = bufferSize;
     }
 
     moveGap(position);
-    if (len > gapSize) {
+
+    // Ensure that the gap can accommodate the new text.
+    while (len > gapSize) {
         expandBuffer();
     }
-    memcpy(buffer + gapStart, text, len);
-    gapStart += len;
-    gapSize -= len;
+
+    // Perform the copy only when the gap size is sufficient.
+    if (len <= gapSize) {
+        memcpy(buffer + gapStart, text, len);
+        gapStart += len;
+        gapSize -= len;
+    }
+
     updateLineStarts();
 }
 
+
 void DocumentText::deleteText(size_t start, size_t end) {
+    if (start >= end || start >= getLength() || end > getLength()) {
+        return;
+    }
+
     moveGap(start);
     size_t deleteSize = end - start;
-    gapEnd += deleteSize;
-    gapSize += deleteSize;
+    gapEnd = min(gapEnd + deleteSize, bufferSize);
+    gapSize = gapEnd - gapStart;
+
     updateLineStarts();
+}
+
+size_t DocumentText::getLength() const {
+    return bufferSize - gapSize;
 }
 
 void DocumentText::moveGap(size_t position) {
@@ -137,11 +156,16 @@ void DocumentText::expandBuffer() {
     size_t newSize = bufferSize * 2;
     char* newBuffer = new char[newSize];
 
+    // Copy content before gap
     memcpy(newBuffer, buffer, gapStart);
-    memcpy(newBuffer + newSize - (bufferSize - gapEnd), buffer + gapEnd, bufferSize - gapEnd);
+
+    // Copy content after gap
+    size_t afterGapSize = bufferSize - gapEnd;
+    memcpy(newBuffer + newSize - afterGapSize, buffer + gapEnd, afterGapSize);
+
     delete[] buffer;
     buffer = newBuffer;
-    gapEnd = newSize - (bufferSize - gapEnd);
+    gapEnd = newSize - afterGapSize;
     gapSize = gapEnd - gapStart;
     bufferSize = newSize;
 }
@@ -236,7 +260,7 @@ size_t DocumentText::getCaretPosition() const {
 
     void CommandHistory::executeCommand(std::unique_ptr<Command> cmd) {
         cmd->execute();
-        lastCommand = cmd.get();
+        lastCursorPosition = cmd->getCursorPosition();
         undoStack.push(std::move(cmd));
         // Clear redo stack
         while (!redoStack.empty()) {
@@ -249,7 +273,7 @@ size_t DocumentText::getCaretPosition() const {
             auto cmd = std::move(undoStack.top());
             undoStack.pop();
             cmd->undo();
-            lastCommand = cmd.get();
+            lastCursorPosition = cmd->getCursorPosition();
             redoStack.push(std::move(cmd));
         }
     }
@@ -259,11 +283,12 @@ size_t DocumentText::getCaretPosition() const {
             auto cmd = std::move(redoStack.top());
             redoStack.pop();
             cmd->execute();
-            lastCommand = cmd.get();
+            lastCursorPosition = cmd->getCursorPosition();
             undoStack.push(std::move(cmd));
         }
     }
 
     size_t CommandHistory::getLastCursorPosition() const {
-        return lastCommand ? lastCommand->getCursorPosition() : 0;
+        return lastCursorPosition;
     }
+

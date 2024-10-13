@@ -569,13 +569,33 @@ void TextEditor::SynchronizeDocumentWithEdit(HWND hEditControl) {
 }
 
 void TextEditor::undo() {
+    size_t currentPosition = getCurrentDocument()->getCaretPosition();
     commandHistory.undo();
     updateEditControl();
+
+    size_t newPosition = commandHistory.getLastCursorPosition();
+    if (newPosition == 0) {
+        newPosition = currentPosition;
+    }
+    setCursorPosition(newPosition);
 }
 
 void TextEditor::redo() {
+    size_t currentPosition = getCurrentDocument()->getCaretPosition();
     commandHistory.redo();
     updateEditControl();
+
+    size_t newPosition = commandHistory.getLastCursorPosition();
+    if (newPosition == 0) {
+        newPosition = currentPosition;
+    }
+    setCursorPosition(newPosition);
+}
+
+void TextEditor::setCursorPosition(size_t position) {
+    HWND currentEditControl = tabControl->getCurrentEditControl();
+    SendMessage(currentEditControl, EM_SETSEL, position, position);
+    SendMessage(currentEditControl, EM_SCROLLCARET, 0, 0);
 }
 
 void TextEditor::updateEditControl() {
