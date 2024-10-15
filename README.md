@@ -1,6 +1,9 @@
 # NickolasDDiazTextEditor
 
 A text editor built using C++ and the Windows API.
+
+![image](https://github.com/user-attachments/assets/c97cb56a-fb64-4857-b79d-3186279850f8)
+
 ## Features
 
 ### Multi-Document Interface
