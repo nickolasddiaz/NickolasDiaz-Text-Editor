@@ -1,6 +1,6 @@
 # NickolasDDiazTextEditor
 
-A text editor built using C++ and the Windows API.
+A text editor built using C++ and Windows API.
 
 ![image](https://github.com/user-attachments/assets/c97cb56a-fb64-4857-b79d-3186279850f8)
 
@@ -34,7 +34,7 @@ A text editor built using C++ and the Windows API.
   - `DocumentText.cpp`: Text document handling
 
 ## Getting Started
-Download exe https://github.com/nickolasddiaz/NickolasDiaz-Text-Editor/blob/master/nickolasddiazeditor.exe
+Download from the release [https://github.com/nickolasddiaz/NickolasDiaz-Text-Editor/blob/master/nickolasddiazeditor.exe](https://github.com/nickolasddiaz/NickolasDiaz-Text-Editor/releases)
 
 To build and run NickolasDDiazTextEditor:
 
@@ -97,5 +97,3 @@ Pushes the command back onto the undoStack
 
 
 Cursor Position Tracking: Each command stores the cursor position after its execution, allowing for accurate cursor placement during undo/redo operations.
-
-This implementation allows for complex undo/redo operations, maintaining the exact state of the document at each step and providing a seamless user experience.
