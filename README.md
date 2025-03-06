@@ -1,4 +1,4 @@
-# NickolasDDiazTextEditor
+# [NickolasDDiazTextEditor](https://github.com/nickolasddiaz/NickolasDiaz-Text-Editor)
 
 A text editor built using C++ and Windows API.
 
