@@ -11,21 +11,22 @@
 
 class TabControl {
 public:
-    TabControl(HWND parentWindow);
+    explicit TabControl(HWND parentWindow);
 
     void addTab(const std::wstring& title, HWND content, const std::wstring& filePath = L"");
     void removeTab(int index);
-    int getCurrentTabIndex() const;
-    void setCurrentTab(int index);
-    int getTabCount();
-    HWND getTabControlHandle() const;
-    HWND getCurrentEditControl() const;
+    [[nodiscard]] int getCurrentTabIndex() const;
+    void setCurrentTab(int index) const;
+    [[nodiscard]] int getTabCount() const;
+    [[nodiscard]] HWND getTabControlHandle() const;
+    [[nodiscard]] HWND getCurrentEditControl() const;
     void setCurrentFilePath(const std::wstring& path);
     std::vector<std::wstring>& getFilePaths();
     std::wstring getCurrentFilePath();
-    void changeTabName(const std::wstring& filePath);
-    void Resize(int width, int height);
-    void DrawTabWithCloseButton(HDC hdc, const RECT& rect, LPCTSTR text, bool isSelected);
+    void changeTabName(const std::wstring& filePath) const;
+    void Resize(int width, int height) const;
+
+    static void DrawTabWithCloseButton(HDC hdc, const RECT& rect, LPCTSTR text, bool isSelected);
     std::function<void(int)> onTabChanged;
     std::function<void(int)> onTabRemoved;
 
@@ -36,8 +37,8 @@ private:
     std::vector<std::wstring> filePaths;
 
     static LRESULT CALLBACK TabProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
-    void showTabContent(int index);
-    LRESULT OnPaint(HWND hWnd);
+    void showTabContent(int index) const;
+    LRESULT OnPaint(HWND hWnd) const;
 };
 
 #endif // TABCONTROL_H

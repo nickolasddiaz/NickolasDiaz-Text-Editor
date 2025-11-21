@@ -1,6 +1,6 @@
 #include "TextEditor.h"
 #include <commctrl.h>
-#include <windowsx.h>
+#pragma comment(lib, "comctl32.lib")
 
 constexpr int FILE_MENU_NEW = 1;
 constexpr int FILE_MENU_OPEN = 2;
@@ -36,20 +36,18 @@ TextEditor::TextEditor() {
 }
 
 
-void TextEditor::show() {
+void TextEditor::show() const {
     ShowWindow(hMainWindow, SW_SHOW);
     UpdateWindow(hMainWindow);
 }
 
 LRESULT CALLBACK TextEditor::WindowProcedure(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
-    TextEditor* pThis = reinterpret_cast<TextEditor*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
-
-    if (pThis) {
+    if (auto* pThis = reinterpret_cast<TextEditor*>(GetWindowLongPtr(hWnd, GWLP_USERDATA))) {
         return pThis->handleMessage(hWnd, msg, wp, lp);
     }
     else if (msg == WM_NCCREATE) {
-        CREATESTRUCT* pCreate = reinterpret_cast<CREATESTRUCT*>(lp);
-        pThis = reinterpret_cast<TextEditor*>(pCreate->lpCreateParams);
+        auto* pCreate = reinterpret_cast<CREATESTRUCT*>(lp);
+        pThis = static_cast<TextEditor*>(pCreate->lpCreateParams);
         SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pThis));
         return pThis->handleMessage(hWnd, msg, wp, lp);
     }
@@ -63,8 +61,8 @@ void TextEditor::setInstance(HINSTANCE hInst) {
 
 void TextEditor::registerWindowClass() {
     WNDCLASSW wc = { 0 };
-    wc.hbrBackground = (HBRUSH)COLOR_WINDOW;
-    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+    wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW);
+    wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
     wc.hInstance = hInstance;
     wc.lpszClassName = L"TextEditorClass";
     wc.lpfnWndProc = WindowProcedure;
@@ -76,7 +74,7 @@ void TextEditor::createMainWindow() {
         L"TextEditorClass", L"Nickolas Text Editor - new file",
         WS_OVERLAPPEDWINDOW | WS_VISIBLE,
         0, 300, 700, 700,
-        NULL, NULL, hInstance, this
+        nullptr, nullptr, hInstance, this
     );
 }
 
@@ -90,15 +88,15 @@ void TextEditor::addMenus() {
     AppendMenu(hFileMenu, MF_STRING, FILE_MENU_SAVE, L"Save");
     AppendMenu(hFileMenu, MF_STRING, FILE_MENU_SAVE_AS, L"Save As");
     AppendMenu(hFileMenu, MF_STRING, FILE_MENU_SAVE_ALL, L"Save All");
-    AppendMenu(hFileMenu, MF_SEPARATOR, NULL, NULL);
+    AppendMenu(hFileMenu, MF_SEPARATOR, 0, nullptr);
     AppendMenu(hFileMenu, MF_STRING, FILE_MENU_EXIT, L"Exit");
 
     AppendMenu(hEditMenu, MF_STRING, EDIT_MENU_UNDO, L"Undo\tCtrl+Z");
     AppendMenu(hEditMenu, MF_STRING, EDIT_MENU_REDO, L"Redo\tCtrl+Y");
 
 
-    AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hFileMenu, L"File");
-    AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hEditMenu, L"Edit");
+    AppendMenu(hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hFileMenu), L"File");
+    AppendMenu(hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hEditMenu), L"Edit");
 
     SetMenu(hMainWindow, hMenu);
 }
@@ -107,10 +105,10 @@ void TextEditor::addControls() {
     tabControl = new TabControl(hMainWindow);
 
     HWND hEditFile = CreateWindowW(
-        L"EDIT", NULL,
+        L"EDIT", nullptr,
         WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | WS_VSCROLL | WS_HSCROLL,
         0, 30, 700, 670,
-        hMainWindow, NULL, GetModuleHandle(NULL), NULL
+        hMainWindow, nullptr, GetModuleHandle(nullptr), nullptr
     );
 
     documents.push_back(std::make_unique<DocumentText>(hEditFile));
@@ -129,7 +127,7 @@ LRESULT TextEditor::handleMessage(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
             return handleCommand(wp, lp);
 
         case WM_NOTIFY: {
-            NMHDR* nmhdr = (NMHDR*)lp;
+            auto* nmhdr = reinterpret_cast<NMHDR *>(lp);
             if (nmhdr->hwndFrom == tabControl->getTabControlHandle() && nmhdr->code == TCN_SELCHANGE) {
                 int selectedTabIndex = tabControl->getCurrentTabIndex();
                 tabControl->setCurrentTab(selectedTabIndex);
@@ -161,6 +159,7 @@ LRESULT TextEditor::handleMessage(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
                 case 'Y':
                     redo();
                     return 0;
+                default: ;
                 }
             }
             break;
@@ -179,13 +178,13 @@ LRESULT TextEditor::handleMessage(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
 }
 
-void TextEditor::handleException(const std::exception& e) {
+void TextEditor::handleException(const std::exception& e) const {
     std::wstring errorMessage = L"An error occurred: ";
     errorMessage += std::wstring(e.what(), e.what() + strlen(e.what()));
     MessageBoxW(hMainWindow, errorMessage.c_str(), L"Error", MB_OK | MB_ICONERROR);
 }
 
-void TextEditor::handleUnknownException() {
+void TextEditor::handleUnknownException() const {
     MessageBoxW(hMainWindow, L"An unknown error occurred.", L"Error", MB_OK | MB_ICONERROR);
 }
 
@@ -218,6 +217,7 @@ LRESULT TextEditor::handleCommand(WPARAM wp, LPARAM lp) {
     case EDIT_MENU_REDO:
         redo();
         return 0;
+    default: ;
     }
     return 0;
 }
@@ -227,10 +227,10 @@ void TextEditor::createNewTab() {
     GetClientRect(hMainWindow, &rcClient);
 
     HWND newEditFile = CreateWindowW(
-        L"EDIT", NULL,
+        L"EDIT", nullptr,
         WS_CHILD | ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | WS_VSCROLL | WS_HSCROLL,
         0, 0, rcClient.right - rcClient.left, rcClient.bottom - rcClient.top,
-        hMainWindow, NULL, GetModuleHandle(NULL), NULL
+        hMainWindow, nullptr, GetModuleHandle(nullptr), nullptr
     );
 
     documents.push_back(std::make_unique<DocumentText>(newEditFile));
@@ -256,7 +256,7 @@ void TextEditor::openFile() {
 
     if (GetOpenFileNameW(&ofn)) {
         wchar_t* fileName = wcsrchr(filePath, L'\\');
-        if (fileName != NULL) {
+        if (fileName != nullptr) {
             fileName++;
         }
         else {
@@ -264,10 +264,10 @@ void TextEditor::openFile() {
         }
 
         HWND newEditFile = CreateWindowW(
-            L"EDIT", NULL,
+            L"EDIT", nullptr,
             WS_CHILD | ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | WS_VSCROLL | WS_HSCROLL,
             0, 30, 700, 670,
-            hMainWindow, NULL, GetModuleHandle(NULL), NULL
+            hMainWindow, nullptr, GetModuleHandle(nullptr), nullptr
         );
 
         // Initialize the document
@@ -290,7 +290,7 @@ void TextEditor::openFile() {
 }
 
 
-void TextEditor::saveFile() {
+void TextEditor::saveFile() const {
     std::wstring currentFilePath = tabControl->getCurrentFilePath();
     if (currentFilePath.empty()) {
         saveFileAs();
@@ -304,7 +304,7 @@ void TextEditor::saveFile() {
     }
 }
 
-void TextEditor::saveFileAs() {
+void TextEditor::saveFileAs() const {
     OPENFILENAMEW ofn = { 0 };
     wchar_t filePath[MAX_PATH] = L"";
 
@@ -319,7 +319,7 @@ void TextEditor::saveFileAs() {
 
     if (GetSaveFileNameW(&ofn)) {
         wchar_t* fileName = wcsrchr(filePath, L'\\');
-        if (fileName != NULL) {
+        if (fileName != nullptr) {
             fileName++;
         }
         else {
@@ -332,37 +332,54 @@ void TextEditor::saveFileAs() {
             tabControl->setCurrentFilePath(filePath);
             updateWindowTitle();
             tabControl->changeTabName(fileName);
-            InvalidateRect(hMainWindow, NULL, TRUE);
+            InvalidateRect(hMainWindow, nullptr, TRUE);
         }
     }
 }
 
-void TextEditor::saveAllFiles() {
+void TextEditor::saveAllFiles() const {
     for (int i = 0; i < tabControl->getTabCount(); ++i) {
         tabControl->setCurrentTab(i);
         saveFile();
     }
 }
 
-void TextEditor::displayFile(DocumentText* document, HWND editControl) {
-    std::string content;
-    char buf[LONGEST_LINE];
-    for (size_t i = 0; i < document->lineStarts.size(); ++i) {
-        ULONG len = document->getline(i, buf, LONGEST_LINE);
-        content.append(buf, len);
-        content.append("\r\n");
+void TextEditor::displayFile(const DocumentText* document, HWND editControl) {
+    // Get the full document content directly from the buffer
+    size_t totalLen = document->getLength();
+
+    if (totalLen == 0) {
+        SetWindowTextW(editControl, L"");
+        return;
     }
 
-    // Convert UTF-8 to wide string
-    int wideSize = MultiByteToWideChar(CP_UTF8, 0, content.c_str(), -1, nullptr, 0);
+    // Allocate buffer and get all text
+    char* content = new char[totalLen + 1];
+    document->getText(0, totalLen, content);
+
+    // Convert LF to CRLF for the Edit control (if needed)
+    std::string result;
+    result.reserve(totalLen * 2);  // Worst case: every char is LF
+
+    for (size_t i = 0; i < totalLen; ++i) {
+        if (content[i] == '\n' && (i == 0 || content[i-1] != '\r')) {
+            result += '\r';
+        }
+        result += content[i];
+    }
+
+    delete[] content;
+
+    // Convert to wide string
+    int wideSize = MultiByteToWideChar(CP_UTF8, 0, result.c_str(), -1, nullptr, 0);
     std::vector<wchar_t> wideBuffer(wideSize);
-    MultiByteToWideChar(CP_UTF8, 0, content.c_str(), -1, wideBuffer.data(), wideSize);
+    MultiByteToWideChar(CP_UTF8, 0, result.c_str(), -1, wideBuffer.data(), wideSize);
 
     SetWindowTextW(editControl, wideBuffer.data());
 }
 
-void TextEditor::writeFile(const std::wstring& path, DocumentText* document) {
-    HANDLE hFile = CreateFileW(path.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+void TextEditor::writeFile(const std::wstring& path, const DocumentText* document) const {
+    HANDLE hFile = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (hFile == INVALID_HANDLE_VALUE) {
         MessageBoxW(hMainWindow, L"Failed to save file", L"Error", MB_OK | MB_ICONERROR);
         return;
@@ -370,24 +387,24 @@ void TextEditor::writeFile(const std::wstring& path, DocumentText* document) {
 
     char buf[LONGEST_LINE];
     for (size_t i = 0; i < document->lineStarts.size(); ++i) {
-        ULONG len = document->getline(i, buf, LONGEST_LINE);
+        ULONG len = document->get_line(i, buf, LONGEST_LINE);
         DWORD bytesWritten;
-        WriteFile(hFile, buf, len, &bytesWritten, NULL);
+        WriteFile(hFile, buf, len, &bytesWritten, nullptr);
         if (i < document->lineStarts.size() - 1) {  // Don't add newline after the last line
-            WriteFile(hFile, "\r\n", 2, &bytesWritten, NULL);
+            WriteFile(hFile, "\r\n", 2, &bytesWritten, nullptr);
         }
     }
 
     CloseHandle(hFile);
 }
 
-void TextEditor::updateWindowTitle() {
+void TextEditor::updateWindowTitle() const {
     std::wstring currentFilePath = tabControl->getCurrentFilePath();
     std::wstring title = L"Nickolas Text Editor - " + (currentFilePath.empty() ? L"Untitled" : currentFilePath);
     SetWindowTextW(hMainWindow, title.c_str());
 }
 
-LRESULT TextEditor::OnPaint(HWND hWnd) {
+LRESULT TextEditor::OnPaint(HWND hWnd) const {
     PAINTSTRUCT ps;
     HDC hdc = BeginPaint(hWnd, &ps);
 
@@ -413,41 +430,47 @@ LRESULT TextEditor::OnPaint(HWND hWnd) {
 }
 
 
-LONG TextEditor::PaintLine(HDC hdc, ULONG nLineNo, DocumentText* document, const RECT& clientRect) {
+LONG TextEditor::PaintLine(HDC hdc, ULONG nLineNo, const DocumentText* document, const RECT& clientRect) const {
     char buf[LONGEST_LINE];
-    ULONG len;
 
     RECT rect = clientRect;
     rect.top = nLineNo * m_nFontHeight;
     rect.bottom = rect.top + m_nFontHeight;
 
-    len = document->getline(nLineNo, buf, LONGEST_LINE);
+    ULONG len = document->get_line(nLineNo, buf, LONGEST_LINE);
 
     TCHAR wbuf[LONGEST_LINE];
     MultiByteToWideChar(CP_ACP, 0, buf, -1, wbuf, LONGEST_LINE);
 
-    ExtTextOutW(hdc, rect.left, rect.top, ETO_OPAQUE, &rect, wbuf, len, NULL);
+    ExtTextOutW(hdc, rect.left, rect.top, ETO_OPAQUE, &rect, wbuf, len, nullptr);
 
     return 0;
 }
 LRESULT CALLBACK TextEditor::SubclassEditProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
-    TextEditor* pThis = reinterpret_cast<TextEditor*>(dwRefData);
+    auto* pThis = reinterpret_cast<TextEditor*>(dwRefData);
 
     switch (uMsg) {
     case WM_CHAR: {
         if (wParam >= 32 || wParam == VK_TAB || wParam == VK_RETURN) {
-            // Get current selection
             DWORD start, end;
-            SendMessage(hWnd, EM_GETSEL, (WPARAM)&start, (LPARAM)&end);
+            SendMessage(hWnd, EM_GETSEL, reinterpret_cast<WPARAM>(&start), reinterpret_cast<LPARAM>(&end));
 
-            // Create and execute insert command
+            // If there's a selection, delete it first
+            if (start != end) {
+                pThis->commandHistory.executeCommand(
+                    std::make_unique<DeleteCommand>(*(pThis->getCurrentDocument()), start, end - start));
+            }
+
             char ch = static_cast<char>(wParam);
             std::string insertText(1, ch);
-            pThis->commandHistory.executeCommand(std::make_unique<InsertCommand>(*(pThis->getCurrentDocument()), insertText, start));
+            pThis->commandHistory.executeCommand(
+                std::make_unique<InsertCommand>(*(pThis->getCurrentDocument()), insertText, start));
 
-            // Let the default proc handle the actual insertion
+            // Let default proc handle the visual update
             LRESULT result = DefSubclassProc(hWnd, uMsg, wParam, lParam);
-            pThis->SynchronizeDocumentWithEdit(hWnd);
+
+            // Clear the Edit control's internal undo buffer to prevent conflicts
+            SendMessage(hWnd, EM_EMPTYUNDOBUFFER, 0, 0);
             return result;
         }
         break;
@@ -457,17 +480,18 @@ LRESULT CALLBACK TextEditor::SubclassEditProc(HWND hWnd, UINT uMsg, WPARAM wPara
             switch (wParam) {
             case 'Z':
                 pThis->undo();
-                return 0; // Prevent default handling
+                return 0;
             case 'Y':
                 pThis->redo();
-                return 0; // Prevent default handling
+                return 0;
+            default:
+                break;
             }
         }
 
         if (wParam == VK_BACK || wParam == VK_DELETE) {
-            // Get current selection
             DWORD start, end;
-            SendMessage(hWnd, EM_GETSEL, (WPARAM)&start, (LPARAM)&end);
+            SendMessage(hWnd, EM_GETSEL, reinterpret_cast<WPARAM>(&start), reinterpret_cast<LPARAM>(&end));
 
             if (start == end) {
                 if (wParam == VK_BACK && start > 0) {
@@ -479,93 +503,69 @@ LRESULT CALLBACK TextEditor::SubclassEditProc(HWND hWnd, UINT uMsg, WPARAM wPara
             }
 
             if (start != end) {
-                // Create and execute delete command
-                pThis->commandHistory.executeCommand(std::make_unique<DeleteCommand>(*(pThis->getCurrentDocument()), start, end - start));
+                pThis->commandHistory.executeCommand(
+                    std::make_unique<DeleteCommand>(*(pThis->getCurrentDocument()), start, end - start));
             }
 
-            // Let the default proc handle the actual deletion
             LRESULT result = DefSubclassProc(hWnd, uMsg, wParam, lParam);
-            pThis->SynchronizeDocumentWithEdit(hWnd);
+            SendMessage(hWnd, EM_EMPTYUNDOBUFFER, 0, 0);
             return result;
         }
         break;
     }
     case WM_PASTE: {
-        // Handle paste operation
         if (OpenClipboard(hWnd)) {
             HANDLE hData = GetClipboardData(CF_TEXT);
-            if (hData != NULL) {
+            if (hData != nullptr) {
                 char* pszText = static_cast<char*>(GlobalLock(hData));
-                if (pszText != NULL) {
-                    // Get current selection
+                if (pszText != nullptr) {
                     DWORD start, end;
-                    SendMessage(hWnd, EM_GETSEL, (WPARAM)&start, (LPARAM)&end);
+                    SendMessage(hWnd, EM_GETSEL, reinterpret_cast<WPARAM>(&start), reinterpret_cast<LPARAM>(&end));
 
-                    // Create and execute insert command
-                    pThis->commandHistory.executeCommand(std::make_unique<InsertCommand>(*(pThis->getCurrentDocument()), pszText, start));
+                    // Delete selection first if any
+                    if (start != end) {
+                        pThis->commandHistory.executeCommand(
+                            std::make_unique<DeleteCommand>(*(pThis->getCurrentDocument()), start, end - start));
+                    }
+
+                    pThis->commandHistory.executeCommand(
+                        std::make_unique<InsertCommand>(*(pThis->getCurrentDocument()), pszText, start));
 
                     GlobalUnlock(hData);
                 }
             }
             CloseClipboard();
         }
-        // Let the default proc handle the actual paste
         LRESULT result = DefSubclassProc(hWnd, uMsg, wParam, lParam);
-        pThis->SynchronizeDocumentWithEdit(hWnd);
+        SendMessage(hWnd, EM_EMPTYUNDOBUFFER, 0, 0);
         return result;
     }
     case WM_CUT: {
-        // Handle cut operation
-        // Get current selection
         DWORD start, end;
-        SendMessage(hWnd, EM_GETSEL, (WPARAM)&start, (LPARAM)&end);
+        SendMessage(hWnd, EM_GETSEL, reinterpret_cast<WPARAM>(&start), reinterpret_cast<LPARAM>(&end));
 
         if (start != end) {
-            // Create and execute delete command
-            pThis->commandHistory.executeCommand(std::make_unique<DeleteCommand>(*(pThis->getCurrentDocument()), start, end - start));
+            pThis->commandHistory.executeCommand(
+                std::make_unique<DeleteCommand>(*(pThis->getCurrentDocument()), start, end - start));
         }
 
-        // Let the default proc handle the actual cut
         LRESULT result = DefSubclassProc(hWnd, uMsg, wParam, lParam);
-        pThis->SynchronizeDocumentWithEdit(hWnd);
+        SendMessage(hWnd, EM_EMPTYUNDOBUFFER, 0, 0);
         return result;
     }
+    default:
+        break;
     }
 
     return DefSubclassProc(hWnd, uMsg, wParam, lParam);
 }
 
-DocumentText* TextEditor::getCurrentDocument() {
+DocumentText* TextEditor::getCurrentDocument() const {
     int currentTabIndex = tabControl->getCurrentTabIndex();
     if (currentTabIndex >= 0 && currentTabIndex < documents.size()) {
         return documents[currentTabIndex].get();
     }
     return nullptr;
-}
-
-void TextEditor::SynchronizeDocumentWithEdit(HWND hEditControl) {
-    int currentTabIndex = tabControl->getCurrentTabIndex();
-    if (currentTabIndex < 0 || currentTabIndex >= documents.size()) {
-        return;
-    }
-
-    DocumentText* currentDoc = documents[currentTabIndex].get();
-
-    // Get the entire text from the edit control
-    int textLength = GetWindowTextLength(hEditControl);
-    std::vector<wchar_t> buffer(textLength + 1);
-    GetWindowText(hEditControl, buffer.data(), textLength + 1);
-
-    // Convert wide string to UTF-8
-    int utf8Length = WideCharToMultiByte(CP_UTF8, 0, buffer.data(), -1, nullptr, 0, nullptr, nullptr);
-    std::vector<char> utf8Buffer(utf8Length);
-    WideCharToMultiByte(CP_UTF8, 0, buffer.data(), -1, utf8Buffer.data(), utf8Length, nullptr, nullptr);
-
-    // Clear the current document content
-    currentDoc->deleteText(0, currentDoc->getLength());
-
-    // Insert the new content
-    currentDoc->insertText(utf8Buffer.data(), utf8Length - 1, 0);  // -1 to exclude null terminator
 }
 
 void TextEditor::undo() {
@@ -592,13 +592,13 @@ void TextEditor::redo() {
     setCursorPosition(newPosition);
 }
 
-void TextEditor::setCursorPosition(size_t position) {
+void TextEditor::setCursorPosition(size_t position) const {
     HWND currentEditControl = tabControl->getCurrentEditControl();
     SendMessage(currentEditControl, EM_SETSEL, position, position);
     SendMessage(currentEditControl, EM_SCROLLCARET, 0, 0);
 }
 
-void TextEditor::updateEditControl() {
+void TextEditor::updateEditControl() const {
     int currentTabIndex = tabControl->getCurrentTabIndex();
     if (currentTabIndex >= 0 && currentTabIndex < documents.size()) {
         DocumentText* currentDoc = documents[currentTabIndex].get();

@@ -1,6 +1,5 @@
 #include <Windows.h>
-#include <stdlib.h>
-#include <stdio.h>
+#include <cstdlib>
 #include <vector>
 #include <string>
 #include <commctrl.h>
@@ -19,14 +18,14 @@
 
         hTabControl = CreateWindow(WC_TABCONTROL, L"",
             WS_CHILD | WS_CLIPSIBLINGS | WS_VISIBLE,
-            0, 0, 0, 0, parentWindow, NULL, GetModuleHandle(NULL), NULL);
+            0, 0, 0, 0, parentWindow, nullptr, GetModuleHandle(nullptr), nullptr);
 
-        OldTabProc = (WNDPROC)SetWindowLongPtr(hTabControl, GWLP_WNDPROC, (LONG_PTR)TabProc);
-        SetWindowLongPtr(hTabControl, GWLP_USERDATA, (LONG_PTR)this);
+        OldTabProc = reinterpret_cast<WNDPROC>(SetWindowLongPtr(hTabControl, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(TabProc)));
+        SetWindowLongPtr(hTabControl, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
 
         RECT rcClient;
         GetClientRect(parentWindow, &rcClient);
-        SetWindowPos(hTabControl, NULL, 0, 0, rcClient.right, rcClient.bottom, SWP_NOZORDER);
+        SetWindowPos(hTabControl, nullptr, 0, 0, rcClient.right, rcClient.bottom, SWP_NOZORDER);
 
         SendMessage(hTabControl, TCM_SETEXTENDEDSTYLE, 0, TCS_EX_FLATSEPARATORS);
         SendMessage(hTabControl, TCM_SETPADDING, 0, MAKELPARAM(20, 7));
@@ -47,7 +46,7 @@
         TabCtrl_AdjustRect(hTabControl, FALSE, &rcDisplay);
 
         // Set the position and size of the new content window
-        SetWindowPos(content, NULL,
+        SetWindowPos(content, nullptr,
             rcDisplay.left, rcDisplay.top,
             rcDisplay.right - rcDisplay.left,
             rcDisplay.bottom - rcDisplay.top,
@@ -60,7 +59,7 @@
             ShowWindow(content, SW_HIDE);
         }
 
-        InvalidateRect(hTabControl, NULL, TRUE);
+        InvalidateRect(hTabControl, nullptr, TRUE);
     }
     void TabControl::removeTab(int index) {
         if (index >= 0 && index < tabContents.size()) {
@@ -95,7 +94,7 @@
         return TabCtrl_GetCurSel(hTabControl);
     }
 
-    void TabControl::setCurrentTab(int index) {
+    void TabControl::setCurrentTab(int index) const {
         if (index >= 0 && index < tabContents.size()) {
             TabCtrl_SetCurSel(hTabControl, index);
             showTabContent(index);
@@ -105,12 +104,12 @@
         }
     }
 
-    int TabControl::getTabCount() {
+    int TabControl::getTabCount() const {
         return tabContents.size();
     }
 
     HWND TabControl::getTabControlHandle() const {
-        return hTabControl != nullptr ? hTabControl : NULL;
+        return hTabControl != nullptr ? hTabControl : nullptr;
     }
 
     HWND TabControl::getCurrentEditControl() const {
@@ -118,7 +117,7 @@
         if (currentIndex >= 0 && currentIndex < tabContents.size()) {
             return tabContents[currentIndex];
         }
-        return NULL;
+        return nullptr;
     }
 
     void TabControl::setCurrentFilePath(const std::wstring& path) {
@@ -140,17 +139,17 @@
         return L"";
     }
 
-    void TabControl::changeTabName(const std::wstring& filePath) {
+    void TabControl::changeTabName(const std::wstring& filePath) const {
         TCITEM tie;
         tie.mask = TCIF_TEXT;
         tie.pszText = const_cast<LPWSTR>(filePath.c_str());
         TabCtrl_SetItem(hTabControl, getCurrentTabIndex(), &tie);
-        InvalidateRect(hTabControl, NULL, TRUE);
+        InvalidateRect(hTabControl, nullptr, TRUE);
     }
-    void TabControl::Resize(int width, int height) {
+    void TabControl::Resize(int width, int height) const {
         if (hTabControl) {
             // Resize the tab control itself
-            SetWindowPos(hTabControl, NULL, 0, 0, width, height, SWP_NOMOVE | SWP_NOZORDER);
+            SetWindowPos(hTabControl, nullptr, 0, 0, width, height, SWP_NOMOVE | SWP_NOZORDER);
 
             // Get the rectangle for the tab control
             RECT rcTabControl;
@@ -162,7 +161,7 @@
 
             // Resize and reposition all tab contents
             for (HWND hContent : tabContents) {
-                SetWindowPos(hContent, NULL,
+                SetWindowPos(hContent, nullptr,
                     rcDisplay.left, rcDisplay.top,
                     rcDisplay.right - rcDisplay.left,
                     rcDisplay.bottom - rcDisplay.top,
@@ -180,7 +179,7 @@
 
         HPEN pen = CreatePen(PS_SOLID, 1, RGB(200, 200, 200));
         HGDIOBJ oldPen = SelectObject(hdc, pen);
-        MoveToEx(hdc, rect.left, rect.bottom, NULL);
+        MoveToEx(hdc, rect.left, rect.bottom, nullptr);
         LineTo(hdc, rect.left, rect.top);
         LineTo(hdc, rect.right, rect.top);
         LineTo(hdc, rect.right, rect.bottom);
@@ -196,7 +195,7 @@
         closeRect.right = rect.right - 4;
         closeRect.top += 4;
         closeRect.bottom -= 4;
-        DrawText(hdc, TEXT("×"), -1, &closeRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        DrawText(hdc, TEXT("Ã—"), -1, &closeRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     }
 
     HWND hTabControl;
@@ -205,11 +204,11 @@
     std::vector<std::wstring> filePaths;
 
     LRESULT CALLBACK TabControl::TabProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
-        TabControl* pThis = (TabControl*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+        auto* pThis = reinterpret_cast<TabControl *>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
 
         switch (message) {
         case WM_NOTIFY: {
-            NMHDR* nmhdr = (NMHDR*)lParam;
+            auto* nmhdr = reinterpret_cast<NMHDR *>(lParam);
             if (nmhdr->code == TCN_SELCHANGE) {
                 int index = TabCtrl_GetCurSel(hWnd);
                 pThis->showTabContent(index);
@@ -268,33 +267,34 @@
 
                 if (PtInRect(&closeRect, pt)) {
                     pThis->removeTab(tabIndex);
-                    InvalidateRect(hWnd, NULL, TRUE);
+                    InvalidateRect(hWnd, nullptr, TRUE);
                     return 0;
                 }
             }
 
             break;
         }
+        default: ;
         }
 
         return CallWindowProc(pThis->OldTabProc, hWnd, message, wParam, lParam);
     }
 
-    void TabControl::showTabContent(int index) {
+    void TabControl::showTabContent(int index) const {
         for (int i = 0; i < tabContents.size(); ++i) {
             ShowWindow(tabContents[i], i == index ? SW_SHOW : SW_HIDE);
         }
         RECT rcDisplay;
         GetClientRect(hTabControl, &rcDisplay);
         TabCtrl_AdjustRect(hTabControl, FALSE, &rcDisplay);
-        SetWindowPos(tabContents[index], NULL,
+        SetWindowPos(tabContents[index], nullptr,
             rcDisplay.left, rcDisplay.top,
             rcDisplay.right - rcDisplay.left,
             rcDisplay.bottom - rcDisplay.top,
             SWP_NOZORDER);
     }
 
-    LRESULT TabControl::OnPaint(HWND hWnd) {
+    LRESULT TabControl::OnPaint(HWND hWnd) const {
         PAINTSTRUCT ps;
         HDC hdc = BeginPaint(hWnd, &ps);
 
@@ -308,7 +308,7 @@
         HGDIOBJ hOldBitmap = SelectObject(hdcMem, hbmMem);
 
         // Paint the tab control background
-        FillRect(hdcMem, &tabRect, (HBRUSH)(COLOR_WINDOW + 1));
+        FillRect(hdcMem, &tabRect, reinterpret_cast<HBRUSH>((COLOR_WINDOW + 1)));
 
         // Draw the tabs
         int tabCount = TabCtrl_GetItemCount(getTabControlHandle());
